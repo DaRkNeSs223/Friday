@@ -1,0 +1,39 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Friday Web Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Biblioteca Socket.IO client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <!-- gTTS para sintetizar voz no navegador -->
+    <script src="https://unpkg.com/speak-as-browser@latest/index.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>Friday Web Assistant</h1>
+            <div class="header-buttons">
+                <button id="startFriday" class="btn btn-success">Iniciar Friday</button>
+                <button id="stopFriday" class="btn btn-danger" disabled>Parar Friday</button>
+                <button id="showCommands" class="btn btn-info">Comandos</button>
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <!-- Mensagens do chat serão inseridas aqui pelo JavaScript -->
+        </div>
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Digite seu comando..." disabled>
+            <button id="sendButton" disabled>Enviar</button>
+            <button id="micButton" class="mic-button" disabled>🎙️</button>
+        </div>
+        <div class="chat-footer">
+            Status: <span id="statusText">Aguardando...</span>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

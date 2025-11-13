@@ -1,0 +1,185 @@
+/* static/style.css */
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #282C34; /* Fundo escuro */
+    color: #ABB2BF; /* Texto padrão */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.chat-container {
+    width: 90%;
+    max-width: 800px;
+    height: 90vh;
+    background-color: #1E1E1E; /* Fundo do chat */
+    border-radius: 8px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chat-header {
+    background-color: #21252B; /* Cabeçalho escuro */
+    color: white;
+    padding: 15px 20px;
+    border-bottom: 1px solid #3A3F47;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Para botões irem para a linha de baixo em telas pequenas */
+}
+
+.chat-header h1 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #61AFEF; /* Azul claro */
+}
+
+.header-buttons button {
+    margin-left: 10px;
+}
+
+.chat-messages {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto;
+    background-color: #1E1E1E;
+    border-bottom: 1px solid #3A3F47;
+}
+
+.message {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 15px;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.message.friday {
+    background-color: #3A3F47; /* Cor para mensagens do Friday */
+    color: #E06C75; /* Texto da Friday (vermelho claro) */
+    align-self: flex-start;
+    border-bottom-left-radius: 0;
+}
+
+.message.user {
+    background-color: #4C525D; /* Cor para mensagens do usuário */
+    color: #98C379; /* Texto do usuário (verde claro) */
+    align-self: flex-end;
+    margin-left: auto; /* Alinha à direita */
+    border-bottom-right-radius: 0;
+}
+
+.message.system {
+    background-color: #21252B; /* Cor para mensagens do sistema */
+    color: #C678DD; /* Texto do sistema (roxo) */
+    text-align: center;
+    max-width: 100%;
+    margin: 5px auto;
+    font-size: 0.9em;
+}
+
+.message.commands {
+    background-color: #3A3F47;
+    color: #E5C07B; /* Amarelo para comandos */
+    white-space: pre-wrap; /* Preserva quebras de linha */
+    font-family: monospace;
+    font-size: 0.8em;
+}
+
+.chat-input {
+    display: flex;
+    padding: 10px;
+    background-color: #21252B;
+    border-top: 1px solid #3A3F47;
+}
+
+.chat-input input[type="text"] {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #5C6370;
+    border-radius: 5px;
+    background-color: #282C34;
+    color: #ABB2BF;
+    outline: none;
+    margin-right: 5px;
+}
+
+.chat-input button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: #5C6370; /* Cor padrão do botão */
+    color: white;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+.chat-input button:hover:not(:disabled) {
+    background-color: #6A727D;
+}
+
+.chat-input button:disabled {
+    background-color: #3A3F47;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.mic-button {
+    margin-left: 5px;
+    background-color: #E06C75; /* Vermelho para o microfone */
+}
+.mic-button:hover:not(:disabled) {
+    background-color: #EF5350;
+}
+.mic-button.recording {
+    background-color: #98C379; /* Verde quando gravando */
+}
+
+.chat-footer {
+    background-color: #21252B;
+    padding: 10px 15px;
+    border-top: 1px solid #3A3F47;
+    font-size: 0.9em;
+    color: #ABB2BF;
+}
+
+/* Botões do cabeçalho */
+.btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.3s ease;
+}
+
+.btn-success {
+    background-color: #4CAF50;
+    color: white;
+}
+.btn-success:hover:not(:disabled) { background-color: #45a049; }
+
+.btn-danger {
+    background-color: #f44336;
+    color: white;
+}
+.btn-danger:hover:not(:disabled) { background-color: #da190b; }
+
+.btn-info {
+    background-color: #5C6370;
+    color: white;
+}
+.btn-info:hover:not(:disabled) { background-color: #6A727D; }
+
+.btn:disabled {
+    background-color: #3A3F47;
+    cursor: not-allowed;
+    opacity: 0.6;
+}

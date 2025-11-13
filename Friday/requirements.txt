@@ -1,0 +1,13 @@
+SpeechRecognition
+gtts
+playsound3
+pyttsx3
+spotipy
+requests
+Pillow
+pycaw
+comtypes
+pyaudio
+Flask
+Flask-SocketIO
+Simple-websocket
