@@ -10,6 +10,25 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <!-- gTTS para sintetizar voz no navegador -->
     <script src="https://unpkg.com/speak-as-browser@latest/index.js"></script>
+    <style>
+        .led-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 10px;
+            background-color: red; /* Inicialmente vermelho (offline) */
+        }
+        /* Estilos para a barra de status, se desejar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end; /* Alinha à direita, ou ajuste conforme necessário */
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-top: 1px solid #ccc;
+        }
+    </style>
 </head>
 <body>
     <div class="chat-container">
@@ -29,11 +48,30 @@
             <button id="sendButton" disabled>Enviar</button>
             <button id="micButton" class="mic-button" disabled>🎙️</button>
         </div>
-        <div class="chat-footer">
-            Status: <span id="statusText">Aguardando...</span>
+        <!-- Mudei o chat-footer para status-bar para melhor organização e aplicação do LED -->
+        <div class="status-bar">
+            <span id="status-text">Status: Aguardando...</span>
+            <div id="led-indicator" class="led-indicator"></div>
         </div>
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        const socket = io(); // Garanta que a inicialização do socket está aqui ou no script.js
+
+        socket.on('update_status', function(data) {
+            document.getElementById('status-text').innerText = 'Status: ' + data.status;
+            const led = document.getElementById('led-indicator');
+            if (data.status.toLowerCase().includes('rodando') ||
+                data.status.toLowerCase().includes('ouvindo') ||
+                data.status.toLowerCase().includes('processando') ||
+                data.status.toLowerCase().includes('falando')) {
+                led.style.backgroundColor = 'green';
+            } else {
+                led.style.backgroundColor = 'red';
+            }
+        });
+        // Outros listeners de socket e lógica do cliente podem ir aqui ou no script.js
+    </script>
 </body>
 </html>
