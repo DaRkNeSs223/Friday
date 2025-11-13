@@ -1,5 +1,3 @@
-# --- START OF FILE Friday_Master.py ---
-
 # --- BIBLIOTERIAS PADRÃO ---
 import speech_recognition as sr
 from gtts import gTTS
@@ -11,11 +9,11 @@ import ast, operator, re
 import math
 import tempfile
 import webbrowser
-import threading # Para controlar a reprodução de áudio em uma thread separada
-import queue # Adicionado para comunicação entre threads
+import threading
+import queue
 
 # --- BIBLIOTECAS DE TERCEIROS (FUNCIONALIDADES ADICIONAIS) ---
-import requests  # Para Clima e Moedas
+import requests
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
@@ -73,7 +71,7 @@ def authenticate_spotify():
     try:
         auth_manager = SpotifyOAuth(scope=SCOPE, cache_path=".spotify_token_cache")
         sp = spotipy.Spotify(auth_manager=auth_manager)
-        speak("Conectado ao Spotify.") # Usa a função 'speak' global, que será sobrescrita pela GUI
+        speak("Conectado ao Spotify.")
     except Exception as e:
         print(f"Erro ao autenticar com Spotify: {e}")
         speak("Não consegui conectar ao Spotify. Verifique suas credenciais e permissões.")
@@ -94,53 +92,45 @@ except Exception as e:
 stop_audio_flag = threading.Event()
 audio_thread = None
 
-# --- CALLBACKS PARA A INTERFACE WEB (GLOBAL) ---
-# Estas funções serão sobrescritas pelo `friday_web_app.py`
-# As funções originais do Friday_Master agora terão o sufixo _original
+# --- CALLBACKS PARA A INTERFACE (GLOBAL) ---
+gui_speak_callback = None
+gui_listen_callback = None
+gui_update_status_callback = None
+
 web_speak_callback = None
 web_listen_callback = None
-web_update_status_callback = None # Novo callback para atualizar o status na web
-
-# Fila para comandos de texto vindos do navegador
-web_command_queue = queue.Queue()
-# Flag para indicar se a assistente deve ouvir o microfone ou aguardar comando da fila
-listen_from_web_input = threading.Event() # Set quando um comando de texto é enviado pela web
-listen_from_web_microphone = threading.Event() # Set quando o microfone do navegador é ativado
+web_update_status_callback = None
 
 def speak(text, lang='pt'):
-    """Função global de fala. Se a interface web estiver ativa, ela chama o callback da web."""
-    if web_speak_callback:
-        web_speak_callback(text, lang)
-    else: # Fallback para o comportamento original (ou CLI aprimorado)
+    if gui_speak_callback:
+        gui_speak_callback(text, lang)
+    elif web_speak_callback:
+        web_speak_callback(text, "FRIDAY")
+    else:
         speak_original(text, lang)
 
 def listen(timeout=5, phrase_time_limit=6):
-    """Função global de escuta. Se a interface web estiver ativa, ela chama o callback da web."""
-    if web_listen_callback:
-        # Quando a GUI está ativa, a assistente 'ouve' de duas formas:
-        # 1. Do microfone local (como antes, para comandos de voz)
-        # 2. De um input de texto da web (enviado via queue)
-
-        # Atualiza o status na web para indicar que está aguardando input
-        if web_update_status_callback:
-            web_update_status_callback("Ouvindo...")
-
-        # Espera por um comando de texto da web OU por ativação do microfone do navegador
-        # Prioriza o microfone local (se ainda estiver em uso) ou comando de texto da web
-        # Se web_listen_callback estiver definido, significa que a interface web está ativa.
-        # Nesse caso, a 'escuta' real do microfone físico é desativada por padrão,
-        # e a assistente espera por entrada via SocketIO (seja por texto digitado ou microfone do navegador).
-        
-        # O Friday_web_app.py vai gerenciar a obtenção do comando do usuário,
-        # seja por texto digitado ou por áudio do navegador, e o passará de volta aqui.
+    update_status("Ouvindo...") # Atualiza o status para "Ouvindo" antes de realmente escutar
+    if gui_listen_callback:
+        return gui_listen_callback(timeout, phrase_time_limit)
+    elif web_listen_callback:
         return web_listen_callback(timeout, phrase_time_limit)
-    else: # Fallback para o comportamento original (sem interface web)
+    else:
         return listen_original(timeout, phrase_time_limit)
+
+def update_status(status_text):
+    if gui_update_status_callback:
+        gui_update_status_callback(status_text)
+    elif web_update_status_callback:
+        web_update_status_callback(status_text)
+    # else: print(f"Status: {status_text}") # Opcional: imprimir no console se não houver GUI/Web
+
 
 # --- FUNÇÕES DE FALA E ESCUTA ORIGINAIS ---
 def speak_original(text, lang='pt'):
-    if web_speak_callback is None: # Apenas printa no console se não houver interface web
+    if gui_speak_callback is None and web_speak_callback is None:
         print(f"[SPEAK ONLINE - {lang.upper()}]", text)
+    update_status("Falando...") # Define o status para "Falando"
     try:
         tts = gTTS(text=text, lang=lang)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
@@ -151,13 +141,15 @@ def speak_original(text, lang='pt'):
     except Exception as e:
         print(f"Erro no gTTS: {e}. Tentando fala offline.")
         speak_offline_original(text)
+    update_status("Pronto para o próximo comando") # Retorna ao status "Pronto" após falar
 
 def speak_offline_original(text):
     if not PYTTSX3_AVAILABLE:
         print("Biblioteca pyttsx3 não encontrada. Impossível usar fala offline.")
         return
-    if web_speak_callback is None: # Apenas printa no console se não houver interface web
+    if gui_speak_callback is None and web_speak_callback is None:
         print("[SPEAK OFFLINE]", text)
+    update_status("Falando offline...") # Define o status para "Falando offline"
     engine = pyttsx3.init()
     voices = engine.getProperty('voices')
     for voice in voices:
@@ -166,37 +158,39 @@ def speak_offline_original(text):
             break
     engine.say(text)
     engine.runAndWait()
+    update_status("Pronto para o próximo comando") # Retorna ao status "Pronto" após falar
 
 def listen_original(timeout=5, phrase_time_limit=6):
-    # Esta função só será usada se NENHUM callback de GUI/Web estiver ativo.
-    # Ou seja, quando Friday_Master.py é executado diretamente.
     with sr.Microphone() as source:
         try:
             print("Ouvindo...")
-            r.adjust_for_ambient_noise(source, duration=0.5) # Ajusta ruído mais rápido
+            r.adjust_for_ambient_noise(source, duration=0.5)
             audio = r.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
             print("Reconhecendo...")
+            update_status("Reconhecendo...") # Define o status para "Reconhecendo"
             recognized_text = r.recognize_google(audio, language='pt-BR').lower()
             print(f"Você disse: {recognized_text}")
+            update_status("Processando...") # Define o status para "Processando"
             return recognized_text
         except sr.WaitTimeoutError:
             print("Tempo limite de espera atingido. Nenhuma fala detectada.")
+            update_status("Tempo limite. Pronto para o próximo comando")
             return ""
         except sr.UnknownValueError:
             print("Não consegui entender o áudio.")
+            update_status("Não entendi. Pronto para o próximo comando")
             return ""
         except sr.RequestError as e:
             print(f"Erro no serviço de reconhecimento; {e}")
+            update_status(f"Erro de reconhecimento: {e}. Pronto para o próximo comando")
             return ""
         except Exception as e:
             print(f"Erro na escuta: {e}")
+            update_status(f"Erro na escuta: {e}. Pronto para o próximo comando")
             return ""
 
 
 # --- FUNÇÕES DE COMANDOS (Sem alterações) ---
-# ... (Todas as suas funções de comando como add_event, read_agenda, etc. permanecem as mesmas.
-# Elas continuarão chamando `speak` e `listen` que agora são redirecionadas pela interface web.) ...
-
 def add_event(text):
     data_cadastro = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     with open(AGENDA_FILE, 'a', encoding='utf-8') as f:
@@ -299,27 +293,49 @@ def get_currency_rate(currency_code, currency_name):
         print(f"Erro ao buscar cotação: {e}")
         return "Ocorreu um erro ao buscar a cotação."
 
-def change_volume(amount):
-    if not PYCAW_AVAILABLE: return "Desculpe, a biblioteca para controlar o volume não está instalada."
+# Helper function to get the master volume interface
+def get_master_volume_interface():
+    if not PYCAW_AVAILABLE:
+        return None, "Desculpe, a biblioteca para controlar o volume não está instalada."
     try:
-        devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
-        new_volume = max(0.0, min(1.0, volume.GetMasterVolumeLevelScalar() + amount))
-        volume.SetMasterVolumeLevelScalar(new_volume, None)
+        devices = AudioUtilities.GetAllDevices()
+        for device in devices:
+            default_device = AudioUtilities.GetSpeakers()
+            if default_device:
+                volume = default_device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                return cast(volume, POINTER(IAudioEndpointVolume)), None
+        return None, "Não consegui encontrar o dispositivo de audio principal."
+
+    except Exception as e:
+        print(f"Erro ao obter dispositivos de audio: {e}")
+        if "co_create_instance" in str(e).lower():
+            return None, "Erro ao criar o objeto COM de audio. Verifique sua instalação do pycaw e drivers de audio."
+        return None, "Ocorreu um erro ao acessar os dispositivos de audio."
+
+def change_volume(amount):
+    volume_interface, error_msg = get_master_volume_interface()
+    if error_msg:
+        return error_msg
+    
+    try:
+        current_volume = volume_interface.GetMasterVolumeLevelScalar()
+        new_volume = max(0.0, min(1.0, current_volume + amount))
+        volume_interface.SetMasterVolumeLevelScalar(new_volume, None)
         return f"Volume ajustado para {int(new_volume * 100)}%"
     except Exception as e:
         print(f"Erro ao alterar o volume: {e}")
         return "Ocorreu um erro ao ajustar o volume."
 
 def set_volume(level_percent):
-    if not PYCAW_AVAILABLE: return "Desculpe, a biblioteca para controlar o volume não está instalada."
-    if not 0 <= level_percent <= 100: return "Por favor, diga um número entre 0 e 100."
+    if not 0 <= level_percent <= 100: 
+        return "Por favor, diga um número entre 0 e 100."
+    
+    volume_interface, error_msg = get_master_volume_interface()
+    if error_msg:
+        return error_msg
+
     try:
-        devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
-        volume.SetMasterVolumeLevelScalar(level_percent / 100.0, None)
+        volume_interface.SetMasterVolumeLevelScalar(level_percent / 100.0, None)
         return f"Volume ajustado para {level_percent}%"
     except Exception as e:
         print(f"Erro ao definir o volume: {e}")
@@ -422,7 +438,7 @@ def open_whatsapp():
         webbrowser.open("whatsapp://")
         time.sleep(1)
     except Exception as e:
-        print(f"Erro ao tentar abrir o aplicativo WhatsApp: {e}. Tentando abrir no navegador.")
+        print(f"Erro ao tentar abrir o aplicativo WhatsApp: {e}. Tentando abrir o WhatsApp Web no navegador.")
         webbrowser.open("https://web.whatsapp.com/")
         speak("Não consegui abrir o aplicativo WhatsApp, abrindo o WhatsApp Web no navegador.")
 
@@ -448,6 +464,11 @@ def open_brksedu_youtube():
 
 
 def _play_audio_loop(audio_file, stop_event):
+    """
+    Plays an audio file in a loop until the stop_event is set.
+    Note: playsound3 is blocking, so stop_event is checked *between* plays.
+    For immediate stop during playback, a different audio library is needed.
+    """
     while not stop_event.is_set():
         try:
             playsound(audio_file)
@@ -457,12 +478,14 @@ def _play_audio_loop(audio_file, stop_event):
             print(f"Erro ao tocar o arquivo {audio_file}: {e}")
             break
 
+
 def play_bad_time_audio():
     global audio_thread, stop_audio_flag
     audio_file = "sans.mp3"
     if os.path.exists(audio_file):
+        stop_playing_audio()
         speak(f"Tocando {audio_file}. Você está tendo um tempo ruim.")
-        stop_audio_flag.clear() # Garante que o flag de parada esteja limpo
+        stop_audio_flag.clear()
         audio_thread = threading.Thread(target=_play_audio_loop, args=(audio_file, stop_audio_flag))
         audio_thread.start()
     else:
@@ -472,14 +495,14 @@ def stop_playing_audio():
     global audio_thread, stop_audio_flag
     if audio_thread and audio_thread.is_alive():
         stop_audio_flag.set()
-        audio_thread.join(timeout=1) # Espera a thread terminar por um curto período
+        audio_thread.join(timeout=2)
+        if audio_thread.is_alive():
+            print("Aviso: Thread de áudio não terminou dentro do tempo limite.")
         speak("Áudio parado.")
     else:
         speak("Nenhum áudio de bad time está tocando.")
 
 def print_commands_list():
-    # Esta função será chamada pela GUI para exibir os comandos na janela.
-    # Se rodado diretamente, ainda printa no console.
     commands_str = """
 --- COMANDOS DISPONÍVEIS ---
   - 'Que horas são?': Informa a hora atual.
@@ -494,42 +517,40 @@ def print_commands_list():
   - 'Aumentar volume': Aumenta o volume do sistema.
   - 'Diminuir volume': Diminui o volume do sistema.
   - 'Definir volume para [porcentagem]': Define o volume para uma porcentagem específica (ex: 'definir volume para 50 por cento').
+  - 'Encerrar' / 'Desligar': Desliga a assistente.
+
+  --- COMANDOS EM APPS/WEB ---
   - 'Tocar música [nome da música]': Toca uma música no Spotify.
   - 'Abrir YouTube': Abre o YouTube no navegador.
   - 'Abrir YouTube pesquisar por [termo]': Abre o YouTube e pesquisa por um termo específico.
   - 'Abrir Spotify': Abre o aplicativo ou site do Spotify.
   - 'Abrir portal da faculdade': Abre o portal da UNINOVE.
   - 'Abrir conversas': Abre o WhatsApp (aplicativo ou web).
+
+  --- EASTER EGG ---
   - 'Jogar': Abre o aplicativo Xbox ou o Xbox Cloud Gaming.
   - 'Geometria': Abre o canal BRKsEDU no YouTube.
   - 'Bad time': Toca o áudio 'sans.mp3' em loop.
   - 'Parar de tocar' / 'Parar áudio': Para o áudio de 'bad time'.
-  - 'Encerrar' / 'Desligar': Desliga a assistente.
+  
 -----------------------------
     """
-    if web_speak_callback: # Se a interface web está ativa, manda para lá
-        web_speak_callback(commands_str, "COMANDOS")
-    else: # Senão, printa no console
-        print(commands_str)
-    return commands_str # Retorna para a interface web poder usar
+    return commands_str
 
-
-# Adapte a função main_loop para receber um checker de status da interface web
-def main_loop_with_web_interface(running_checker=None):
+def main_loop_with_gui(running_checker=None):
     speak("Olá, como posso ajudar?")
     while True:
         if running_checker and not running_checker():
-            break # Sair do loop se a interface web indicar que deve parar
+            break
 
-        # Chama a função listen que agora vai interagir com a web
-        command = listen()
+        command = listen() # listen já chama update_status("Ouvindo...") e "Reconhecendo..."/"Processando..."
         if not command:
+            update_status("Pronto para o próximo comando")
             continue
 
-        # Mantém o print para debug no console ou na interface web log
         print(f"Comando recebido: {command}")
+        # update_status("Processando comando...") # Já é chamado dentro de listen_original ou web_listen_callback_impl
 
-        # --- Lógica de Comandos (SEM ALTERAÇÕES) ---
         if "horas" in command:
             speak(f"Agora são {datetime.datetime.now().strftime('%H:%M')}")
         elif "que dia é hoje" in command:
@@ -629,12 +650,134 @@ def main_loop_with_web_interface(running_checker=None):
             stop_playing_audio()
         elif "encerrar" in command or "desligar" in command:
             speak("Até mais!")
+            update_status("Inativo")
             break
         else:
             speak("Não entendi o comando.")
+        
+        update_status("Pronto para o próximo comando")
 
-# Modificado para rodar main_loop_with_web_interface
+def main_loop_with_web_interface(running_checker=None):
+    speak("Olá, como posso ajudar?")
+    while True:
+        if running_checker and not running_checker():
+            break
+
+        command = listen() # listen já chama update_status("Ouvindo...") e "Reconhecendo..."/"Processando..."
+        if not command:
+            update_status("Pronto para o próximo comando")
+            continue
+
+        print(f"Comando recebido: {command}")
+        # update_status("Processando comando...") # Já é chamado dentro de listen_original ou web_listen_callback_impl
+
+        if "horas" in command:
+            speak(f"Agora são {datetime.datetime.now().strftime('%H:%M')}")
+        elif "que dia é hoje" in command:
+            speak(f"Hoje é {datetime.datetime.now().strftime('%d de %B de %Y')}")
+        elif "adicionar evento" in command:
+            speak("Qual evento você gostaria de adicionar?")
+            event_text = listen()
+            if event_text:
+                add_event(event_text)
+            else:
+                speak("Não entendi o evento.")
+        elif "ler agenda" in command:
+            read_agenda()
+        elif "limpar agenda" in command:
+            speak("Tem certeza que deseja limpar a agenda?")
+            confirm = listen()
+            if "sim" in confirm or "claro" in confirm:
+                clear_agenda()
+            else:
+                speak("Limpeza da agenda cancelada.")
+        elif "calcular" in command:
+            speak("Qual cálculo você quer fazer?")
+            calculation = listen(timeout=10, phrase_time_limit=8)
+            if calculation:
+                try:
+                    result = safe_eval(calculation)
+                    speak(f"O resultado é {result:.2f}")
+                except (ValueError, TypeError, SyntaxError) as e:
+                    speak(f"Não consegui resolver. Erro: {e}")
+            else:
+                speak("Não entendi o cálculo.")
+        elif "resolver equação" in command:
+            speak("É uma equação de primeiro ou segundo grau?")
+            eq_type = listen()
+            resolver_equacao(eq_type)
+        elif "qual o clima" in command or "previsão do tempo" in command:
+            speak("De qual cidade você quer saber o clima?")
+            city = listen()
+            if city:
+                weather_info = get_weather(city)
+                speak(weather_info)
+            else:
+                speak("Não entendi a cidade.")
+        elif "cotação do" in command:
+            for key, val in CURRENCY_MAP.items():
+                if key in command:
+                    speak(get_currency_rate(val['code'], val['name']))
+                    break
+            else:
+                speak("Não entendi qual moeda.")
+        elif "aumentar volume" in command:
+            speak(change_volume(0.1))
+        elif "diminuir volume" in command:
+            speak(change_volume(-0.1))
+        elif "definir volume para" in command:
+            try:
+                parts = command.split("definir volume para")
+                if len(parts) > 1:
+                    level_str = re.search(r'\d+', parts[1])
+                    if level_str:
+                        level_percent = int(level_str.group())
+                        speak(set_volume(level_percent))
+                    else:
+                        speak("Por favor, diga o nível do volume em porcentagem, como 'definir volume para 50 por cento'.")
+                else:
+                    speak("Por favor, diga o nível do volume em porcentagem.")
+            except ValueError:
+                speak("Não entendi o nível do volume. Por favor, diga um número.")
+        elif "tocar música" in command or "tocar canção" in command:
+            speak("Que música você gostaria de tocar?")
+            music_name = listen()
+            if music_name:
+                play_spotify_music_api(music_name)
+            else:
+                speak("Não entendi o nome da música.")
+        elif "abrir youtube" in command:
+            if "pesquisar por" in command:
+                query = command.split("pesquisar por", 1)[1].strip()
+                open_youtube_video(query)
+            else:
+                open_youtube_video()
+        elif "abrir spotify" in command:
+            open_spotify_app()
+        elif "abrir portal da faculdade" in command:
+            open_college_portal()
+        elif "abrir conversas" in command:
+            open_whatsapp()
+        elif "jogar" in command:
+            open_xbox_app()
+        elif "geometria" in command:
+            open_brksedu_youtube()
+        elif "bad time" in command:
+            play_bad_time_audio()
+        elif "parar de tocar" in command or "parar áudio" in command or "parar o áudio" in command:
+            stop_playing_audio()
+        elif "parar" in command and audio_thread and audio_thread.is_alive():
+            stop_playing_audio()
+        elif "encerrar" in command or "desligar" in command:
+            speak("Até mais!")
+            update_status("Inativo")
+            break
+        else:
+            speak("Não entendi o comando.")
+        
+        update_status("Pronto para o próximo comando")
+
+
 if __name__ == "__main__":
-    # Autentica Spotify no início se for executado diretamente
     authenticate_spotify()
-    main_loop_with_web_interface() # Se rodado diretamente, ele funciona como antes
+    main_loop_with_gui() # Ou main_loop_with_web_interface() se fosse iniciado diretamente
