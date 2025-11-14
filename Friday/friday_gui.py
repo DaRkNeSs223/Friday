@@ -1,3 +1,5 @@
+# --- START OF FILE friday_gui.py ---
+
 # friday_gui.py
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
@@ -47,16 +49,20 @@ class FridayGUI:
         self.assistant_thread = None
         self.running_assistant = False
 
-        sys.stdout = TextRedirector(self.text_area, "STDOUT")
-        sys.stderr = TextRedirector(self.text_area, "ERRO")
+        # Redirecionamento de stdout e stderr para a área de texto da GUI
+        # Isso significa que todos os 'print()' do Friday_Master.py irão para a GUI aqui.
+        sys.stdout = TextRedirector(self.text_area, "STDOUT_GUI_CONSOLE") # Use uma tag diferente para identificar
+        sys.stderr = TextRedirector(self.text_area, "ERRO_GUI_CONSOLE") # Use uma tag diferente para identificar
 
         self.update_gui_text("Friday Assistant iniciado. Pressione 'Iniciar Friday' para começar.", "SISTEMA")
         self.master.update_idletasks()
 
-        self.update_gui_text("Autenticando Spotify em segundo plano...", "SISTEMA")
-        threading.Thread(target=assistant_core.authenticate_spotify).start()
+        # As mensagens de autenticação e calibração agora serão chamadas pelo main_loop
+        # quando o Friday for de fato iniciado, e não na inicialização da GUI.
+        # self.update_gui_text("Autenticando Spotify em segundo plano...", "SISTEMA")
+        # threading.Thread(target=assistant_core.authenticate_spotify).start()
 
-        # Abrir a interface web automaticamente
+        # Abrir a interface web automaticamente (opcional, pode ser removido se não quiser isso na GUI)
         self.open_web_app_automatically()
 
 
@@ -83,8 +89,9 @@ class FridayGUI:
 
     def _actual_update_text(self, message, sender):
         self.text_area.config(state='normal')
+        # Limita o número de linhas para evitar uso excessivo de memória
         if self.text_area.index(tk.END).count('\n') > 1000:
-            start_index = self.text_area.index("1.0 + 100 lines")
+            start_index = self.text_area.index("1.0 + 100 lines") # Mantém as últimas 900 linhas
             self.text_area.delete("1.0", start_index)
         self.text_area.insert(tk.END, f"\n[{sender}] {message}", sender)
         self.text_area.config(state='disabled')
@@ -95,7 +102,7 @@ class FridayGUI:
 
     def _actual_update_status(self, status_text):
         self.status_label.config(text=f"Status: {status_text}")
-        if "rodando" in status_text.lower() or "ouvindo" in status_text.lower() or "processando" in status_text.lower() or "falando" in status_text.lower():
+        if "rodando" in status_text.lower() or "ouvindo" in status_text.lower() or "processando" in status_text.lower() or "falando" in status_text.lower() or "conectado" in status_text.lower() or "calibrando" in status_text.lower():
             self.led_canvas.itemconfig(self.led_indicator, fill="green")
         else:
             self.led_canvas.itemconfig(self.led_indicator, fill="red")
@@ -103,18 +110,20 @@ class FridayGUI:
 
     def speak_in_gui(self, text, lang='pt'):
         self.update_gui_text(text, sender="FRIDAY")
-        self.update_status("Falando...")
-        assistant_core.speak_original(text, lang)
+        # Não chame update_status aqui, pois a função `speak` do Friday_Master já lida com isso.
+        # A chamada `speak_original` será feita pelo `speak` do Friday_Master, 
+        # que já tem o `print` de fallback para o terminal (ou para a GUI se redirecionado).
+        assistant_core.speak_original(text, lang) 
 
     def listen_in_gui(self, timeout=5, phrase_time_limit=6):
         self.update_gui_text("Ouvindo... (Diga 'Friday' ou um comando)", sender="VOCÊ")
-        self.update_status("Ouvindo...")
+        # update_status("Ouvindo...") já é chamado antes de listen() no Friday_Master
         recognized_text = assistant_core.listen_original(timeout, phrase_time_limit)
         if recognized_text:
             self.update_gui_text(f"Você disse: {recognized_text}", sender="VOCÊ")
         else:
             self.update_gui_text("Não entendi ou nenhuma fala detectada.", sender="VOCÊ")
-        self.update_status("Processando...")
+        # update_status("Processando...") será chamado após o listen() no Friday_Master
         return recognized_text
 
     def start_friday(self):
@@ -123,6 +132,22 @@ class FridayGUI:
             self.start_button.config(state=tk.DISABLED)
             self.stop_button.config(state=tk.NORMAL)
             self.update_gui_text("Iniciando o loop principal da assistente...", "SISTEMA")
+            # Iniciar Spotify e Calibração aqui, antes de rodar o loop principal
+            self.update_gui_text("Calibrando o microfone para o ruído ambiente...", "SISTEMA")
+            self.update_status("Calibrando microfone...")
+            try:
+                with assistant_core.sr.Microphone() as source:
+                    assistant_core.r.adjust_for_ambient_noise(source, duration=1.5)
+                self.update_gui_text("Microfone calibrado.", "SISTEMA")
+                self.update_status("Microfone calibrado")
+            except Exception as e:
+                self.update_gui_text(f"ERRO: Não foi possível calibrar o microfone: {e}", "ERRO")
+                self.update_status("Erro microfone")
+            
+            self.update_gui_text("Autenticando Spotify em segundo plano...", "SISTEMA")
+            self.update_status("Autenticando Spotify...")
+            threading.Thread(target=assistant_core.authenticate_spotify).start()
+
             self.assistant_thread = threading.Thread(target=self.run_friday_loop)
             self.assistant_thread.daemon = True
             self.assistant_thread.start()
